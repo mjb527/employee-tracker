@@ -1,0 +1,15 @@
+{
+  "name": "Employes-CRM",
+  "version": "1.0.0",
+  "description": "",
+  "main": "query.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "M@",
+  "license": "",
+  "dependencies": {
+    "inquirer": "^7.1.0",
+    "mysql": "^2.16.0"
+  }
+}
