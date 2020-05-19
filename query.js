@@ -63,7 +63,7 @@ const buildQuery = async selection => {
         ])
         .then( async res => {
           if(res.department === "All")
-            resolve(await query(`SELECT * FROM department`));
+            resolve(await query(`SELECT * FROM department ORDER BY id;`));
           else resolve(await query(`SELECT * FROM department WHERE name = '${res.department}'`));
         });
         break;
@@ -79,7 +79,7 @@ const buildQuery = async selection => {
         ])
         .then( async res => {
           if(res.role === "All")
-            resolve(await query(`SELECT * FROM role`));
+            resolve(await query(`SELECT * FROM role ORDER BY id;`));
           else resolve(await query(`SELECT * FROM role WHERE title = '${res.role}'`));
         });
         break;
@@ -94,17 +94,53 @@ const buildQuery = async selection => {
           }
         ])
         .then( async res => {
-          if(res.emp === " All ") {
-            console.log('got to here');
-            resolve(await query(`SELECT * FROM employee`));
-          }
+          if(res.emp === " All ") resolve(await query(`SELECT * FROM employee ORDER BY id`));
 
           else {
-            const id = res.emp.charAt(0);
+            const id = res.emp.match(/^[0-9]+/)[0];
             resolve(await query(`SELECT * FROM employee WHERE id = '${id}'`));
           }
         });
         break;
+
+      case 'View Employees By Manager':
+      inquirer.prompt([
+        {
+          type: 'list',
+          message: 'Search for a managers subordinates info',
+          name: 'emp',
+          choices: employees.map( e => { return e.id + " " + e.first_name + " " + e.last_name } )
+        }
+      ])
+      .then( async res => {
+        const id = res.emp.match(/^[0-9]+/)[0];
+        const name = res.emp.match(/[a-zA-Z]+ [A-Za-z]+$/)[0];
+        console.log('Employees managed by ' + name + ":");
+        resolve(await query(`SELECT * FROM employee WHERE role_id IN(
+                            	SELECT id FROM role WHERE department_id = ${id}
+                            );`));
+      });
+      break;
+
+
+      case 'View Department Cost':
+      inquirer.prompt([
+        {
+          type: 'list',
+          message: 'Select Department:',
+          name: 'dept',
+          choices: departments.slice(1).map( d => { return d.id + ": " + d.name } )
+        }
+      ])
+      .then( async res => {
+        const id = res.dept.match(/^[0-9]+/)[0];
+        const name = res.dept.match(/([0-9A-Za-z\s]+)$/)[0];
+        resolve(await query(`select sum(role.salary) as 'Total Cost of${name}' from employee
+                            	left join role on employee.role_id = role.id
+                            	where role.department_id = ${id};`));
+      });
+      break;
+
 
       case 'Add Department':
       inquirer.prompt([
@@ -189,7 +225,7 @@ const buildQuery = async selection => {
         console.log(salary);
 
         // get the id from the selected department
-        let dept_id = res.department.charAt(0);
+        let dept_id = res.department.match(/^[0-9]+/)[0];
 
         // insert into db
         await query(`INSERT INTO role (title, salary, department_id) VALUES ('${name}', ${salary}, ${dept_id});`);
@@ -253,16 +289,16 @@ const buildQuery = async selection => {
         firstName = firstName.trim().toLowerCase();
         firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
 
-        lastName = firstName.trim().toLowerCase();
+        lastName = lastName.trim().toLowerCase();
         lastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
 
-        role_id = manager_id.charAt(0);
+        role_id = role_id.match(/^[0-9]+/)[0];
 
-        manager_id = manager_id.charAt(0);
+        manager_id = manager_id.match(/^[0-9]+/)[0];
 
         // insert into db
         await query(`INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${firstName}', '${lastName}', ${role_id}, ${manager_id});`);
-        const result = await query(`SELECT * FROM role ORDER BY id DESC LIMIT 1;`);
+        const result = await query(`SELECT * FROM employee ORDER BY id DESC LIMIT 1;`);
         departments.push(result[0]);
 
         process.stdout.clearLine();  // clear current text
@@ -277,11 +313,147 @@ const buildQuery = async selection => {
         break;
 
       case 'Update Employee':
-      resolve('update an employee');
+        // 2 inquirer prompts to get the id as a variable,
+        // can't have someone managing themselves
+        inquirer.prompt([
+          {
+            type: 'list',
+            message: 'Which employee will you update?',
+            name: 'employee_id',
+            choices: employees.slice(1).map( e => { return e.id + ": " + e.first_name + " " + e.last_name })
+          }
+        ])
+        .then( async selection => {
+          let potentialManagers = await query('SELECT * FROM employee WHERE id != ' + selection.employee_id.charAt(0));
+          potentialManagers = potentialManagers.map( e => { return e.id + ": " + e.first_name + " " + e.last_name });
+
+          inquirer.prompt([
+            {
+              type: 'input',
+              message: 'What is the new employees\'s first name?',
+              name: 'firstName',
+              validate : function(firstName) {
+                if( /^[a-zA-Z]+$/.test(firstName.trim()) === false ) {
+                  console.log("\nOnly uppercase and lowercase letters allowed");
+                  return false;
+                }
+                return true;
+              }
+            },
+            {
+              type: 'input',
+              message: 'What is the new employees\'s last name?',
+              name: 'lastName',
+              validate : function(lastName) {
+                if( /^[a-zA-Z]+$/.test(lastName.trim() ) === false) {
+                  console.log("\nOnly uppercase and lowercase letters allowed");
+                  return false;
+                }
+                return true;
+              }
+            },
+            {
+              type: 'list',
+              name: 'role_id',
+              message: 'Select the employee\'s role:',
+              choices: roles.slice(1).map( r => { return r.id + ": " + r.title })
+            },
+            {
+              type: 'list',
+              name: 'manager_id',
+              message: 'Select the employee\'s manager:',
+              choices: potentialManagers
+            }
+          ])
+          .then( async res => {
+            process.stdout.write("Processing...");
+            let {firstName, lastName, role_id, manager_id } = res;
+
+            firstName = firstName.trim().toLowerCase();
+            firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+
+            lastName = lastName.trim().toLowerCase();
+            lastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+
+            role_id = role_id.match(/^[0-9]+/)[0];
+
+            manager_id = manager_id.match(/^[0-9]+/)[0];
+
+            // insert into db
+            await query(`UPDATE employee
+                          SET
+                            first_name = '${firstName}',
+                            last_name = '${lastName}',
+                            role_id = ${role_id},
+                            manager_id = ${manager_id}
+                          WHERE id = ${selection.employee_id.charAt(0)};`);
+            const result = await query(`SELECT * FROM employee ORDER BY id DESC LIMIT 1;`);
+            departments.push(result[0]);
+
+            process.stdout.clearLine();  // clear current text
+            process.stdout.cursorTo(0);  // move cursor to beginning of line
+
+            console.log("New role created: ");
+            resolve(result);
+          })
+        })
+
+        .catch(err => {
+          reject(err)
+        });
+          break;
+
+      case 'Delete Department':
+      inquirer.prompt([
+        {
+          type: 'list',
+          message: 'Select department to delete:',
+          name: 'department',
+          choices: departments.slice(1).map( d => { return d.name } )
+        }
+      ])
+      .then( async res => {
+        await query(`DELETE FROM department WHERE name = '${res.department}'`);
+        resolve([res.department + " Deleted Successfully"]);
+      });
       break;
+
+      case 'Delete Role':
+      inquirer.prompt([
+        {
+          type: 'list',
+          message: 'Search for department info',
+          name: 'role',
+          choices: roles.slice(1).map( r => { return r.title } )
+        }
+      ])
+      .then( async res => {
+        await query(`DELETE FROM role WHERE title = '${res.role}'`);
+        resolve([res.role + " Deleted Successfully"]);
+      });
+      break;
+
+      console.log(employees);
+      case 'Delete Employee':
+      inquirer.prompt([
+        {
+          type: 'list',
+          message: 'Search for department info',
+          name: 'employee',
+          choices: employees.slice(1).map( e => { return e.id + ": " + e.first_name + " " + e.last_name } )
+        }
+      ])
+      .then( async res => {
+        const id = res.employee.match(/^[0-9]+/)[0];
+        await query(`DELETE FROM employee WHERE id = '${id}'`);
+        employees = await query('SELECT * FROM employee ORDER BY id;');
+        resolve([res.employee.match(/[a-zA-Z]+ [a-zA-Z]+$/)[0] + " was Deleted Successfully"]);
+      });
+      break;
+
       default:
-      reject('Something went wrong :(');
-      break;
+        reject(['Something went wrong :(']);
+        break;
 
     }
 
@@ -303,10 +475,15 @@ const init = async () => {
         'View Departments',
         'View Roles',
         'View Employees',
+        'View Employees By Manager',
+        'View Department Cost',
         'Add Department',
         'Add Role',
         'Add Employee',
-        'Update Employee'
+        'Update Employee',
+        'Delete Department',
+        'Delete Role',
+        'Delete Employee'
       ]
     }
   ])
@@ -315,7 +492,7 @@ const init = async () => {
       console.log('Goodbye');
       process.exit();
     }
-    else console.log(await buildQuery(res.selection));
+    else console.table(await buildQuery(res.selection));
 
     init();
   })
