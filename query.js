@@ -27,8 +27,12 @@ const query = queryText => {
   });
 }
 
-// get the criteria on start
+// get the criteria on start & whenever we may need to reset the arrays
 const getCriteria = async () => {
+  departments = [];
+  roles = [];
+  employees = [];
+
   departments.push({"name" : "All"});
   let result = await query('SELECT * FROM department ORDER BY id;');
   for( let i = 0; i < result.length; i++ )
@@ -116,8 +120,8 @@ const buildQuery = async selection => {
         const id = res.emp.match(/^[0-9]+/)[0];
         const name = res.emp.match(/[a-zA-Z]+ [A-Za-z]+$/)[0];
         console.log('Employees managed by ' + name + ":");
-        resolve(await query(`SELECT * FROM employee WHERE role_id IN(
-                            	SELECT id FROM role WHERE department_id = ${id}
+        resolve(await query(`SELECT * FROM employee WHERE manager_id IN(
+                            	SELECT id FROM role WHERE id = ${id}
                             );`));
       });
       break;
@@ -415,6 +419,7 @@ const buildQuery = async selection => {
       .then( async res => {
         await query(`DELETE FROM department WHERE name = '${res.department}'`);
         resolve([res.department + " Deleted Successfully"]);
+        getCriteria();
       });
       break;
 
@@ -422,7 +427,7 @@ const buildQuery = async selection => {
       inquirer.prompt([
         {
           type: 'list',
-          message: 'Search for department info',
+          message: 'Select role to delete',
           name: 'role',
           choices: roles.slice(1).map( r => { return r.title } )
         }
@@ -430,6 +435,7 @@ const buildQuery = async selection => {
       .then( async res => {
         await query(`DELETE FROM role WHERE title = '${res.role}'`);
         resolve([res.role + " Deleted Successfully"]);
+        getCriteria();
       });
       break;
 
@@ -438,7 +444,7 @@ const buildQuery = async selection => {
       inquirer.prompt([
         {
           type: 'list',
-          message: 'Search for department info',
+          message: 'Select employee to delete:',
           name: 'employee',
           choices: employees.slice(1).map( e => { return e.id + ": " + e.first_name + " " + e.last_name } )
         }
@@ -448,6 +454,7 @@ const buildQuery = async selection => {
         await query(`DELETE FROM employee WHERE id = '${id}'`);
         employees = await query('SELECT * FROM employee ORDER BY id;');
         resolve([res.employee.match(/[a-zA-Z]+ [a-zA-Z]+$/)[0] + " was Deleted Successfully"]);
+        getCriteria();
       });
       break;
 

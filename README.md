@@ -16,5 +16,22 @@ To install, simply run the following command:
 
 This line will clone the repository and install the required node modules for you.
 
+In order to use this script, you will need Node.js and MySQL properly installed.
+
 
 ## Examples of use:
+
+### View Tables and Rows:
+![View Examples](assets/view.gif)
+
+### Special Views - Total Cost of Departments and All Subordinates of a Manager
+![Spcial Views Examples](assets/special.gif)
+
+### Add Rows:
+![Add Examples](assets/create.gif)
+
+### Update Employees:
+![View Examples](assets/update.gif)
+
+### Delete Rows:
+![View Examples](assets/delete.gif)
